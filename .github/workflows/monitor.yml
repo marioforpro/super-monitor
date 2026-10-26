@@ -1,0 +1,54 @@
+name: super-monitor
+
+on:
+  schedule:
+    # Every 15 minutes. Public repo → Actions minutes are free and unlimited.
+    - cron: "*/15 * * * *"
+    # Weekly keepalive (see the `keepalive` job). Must match the string in its `if:` exactly.
+    - cron: "41 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      selftest_fail:
+        description: "Add one check that always fails, to prove the failure email arrives"
+        type: boolean
+        default: false
+
+concurrency:
+  group: super-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.event.schedule != '41 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      HC_PING_URL: ${{ secrets.HC_PING_URL }}
+      SELFTEST_FAIL: ${{ inputs.selftest_fail && '1' || '' }}
+      RETRY_DELAY: ${{ inputs.selftest_fail && '5' || '60' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Live checks (one retry per failure)
+        run: python3 check.py
+      - name: Dead-man ping (optional)
+        # If HC_PING_URL is set (healthchecks.io, free), a green run pings it. If runs stop
+        # (Actions disabled, workflow switched off), healthchecks.io emails the owner.
+        if: success() && env.HC_PING_URL != '' && env.SELFTEST_FAIL == ''
+        run: curl -fsS -m 10 --retry 3 "$HC_PING_URL" > /dev/null
+
+  keepalive:
+    # GitHub switches off scheduled workflows in a public repo after 60 days without activity.
+    # Re-enabling the workflow through the API once a week keeps it on without dummy commits.
+    if: github.event.schedule == '41 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    steps:
+      - name: Re-enable this workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/monitor.yml/enable"
