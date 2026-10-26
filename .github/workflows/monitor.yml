@@ -2,8 +2,9 @@ name: super-monitor
 
 on:
   schedule:
-    # Every 15 minutes. Public repo → Actions minutes are free and unlimited.
-    - cron: "*/15 * * * *"
+    # Every 15 minutes, off the round minutes (GitHub drops scheduled runs under load, worst at
+    # :00/:15/:30/:45). Public repo → Actions minutes are free and unlimited.
+    - cron: "3,18,33,48 * * * *"
     # Weekly keepalive (see the `keepalive` job). Must match the string in its `if:` exactly.
     - cron: "41 6 * * 1"
   workflow_dispatch:

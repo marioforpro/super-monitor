@@ -41,7 +41,7 @@ run pings it; if runs stop happening at all, healthchecks.io sends the email ins
 
 ## Cadence
 
-Every 15 minutes (`*/15 * * * *`). The repo is public on purpose: it holds only public URLs and no
+Every 15 minutes (`3,18,33,48 * * * *` — off the round minutes, where GitHub drops the most runs). The repo is public on purpose: it holds only public URLs and no
 secrets, and Actions minutes are free and unlimited on public repos. GitHub's scheduler can delay or
 skip runs under load, so the real spacing is 15 min or a little more.
 
