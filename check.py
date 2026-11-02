@@ -104,24 +104,47 @@ def sd_landing():
     page("https://superdownloads.app", "Super Downloads", "Super-Downloads_aarch64.dmg")
 
 
+# GitHub counts every request to a release download URL as a download, so the monitor never
+# touches them (it inflated Super Downloads' downloads and launches by ~28 runs/day until
+# 2026-11-02). It reads the latest release through the API instead: names, sizes, state.
+SD_API = "https://api.github.com/repos/marioforpro/super-downloads/releases/latest"
+_sd_release_cache: dict = {}
+
+
+def _sd_release() -> dict:
+    if "r" not in _sd_release_cache:
+        headers = {"Accept": "application/vnd.github+json"}
+        if os.environ.get("GH_TOKEN"):
+            headers["Authorization"] = f"Bearer {os.environ['GH_TOKEN']}"
+        _, body, _ = fetch(SD_API, headers=headers)
+        _sd_release_cache["r"] = json.loads(body)
+    return _sd_release_cache["r"]
+
+
+def _sd_assets() -> dict:
+    return {a["name"]: a for a in _sd_release().get("assets", []) if a.get("state") == "uploaded"}
+
+
 def sd_latest_json():
-    _, body, _ = fetch(f"{SD_RELEASE}/latest.json")
-    data = json.loads(body)
-    ver = data.get("version", "")
+    rel = _sd_release()
+    ver = rel.get("tag_name", "")
     parts = tuple(int(x) for x in re.findall(r"\d+", ver)[:3])
     if parts < SD_MIN_VERSION:
-        raise CheckFailed(f"version {ver!r} < {'.'.join(map(str, SD_MIN_VERSION))}")
-    plats = data.get("platforms", {})
-    for p in ("darwin-aarch64", "darwin-x86_64"):
-        if not (plats.get(p, {}).get("url") and plats.get(p, {}).get("signature")):
-            raise CheckFailed(f"latest.json {ver}: {p} missing url/signature")
+        raise CheckFailed(f"latest release {ver!r} < {'.'.join(map(str, SD_MIN_VERSION))}")
+    names = _sd_assets()
+    if "latest.json" not in names:
+        raise CheckFailed(f"{ver}: latest.json missing")
+    # the update signatures live inside latest.json (Tauri); the bundles must be attached.
+    for arch in ("aarch64", "x64"):
+        if not any(n.endswith(f"_{arch}.app.tar.gz") and names[n].get("size", 0) > 5_000_000 for n in names):
+            raise CheckFailed(f"{ver}: {arch} update bundle missing")
 
 
 def _dmg(name: str):
-    status, _, headers = fetch(f"{SD_RELEASE}/{name}", method="HEAD")
-    size = int(headers.get("Content-Length") or 0)
-    if status != 200 or size < 5_000_000:
-        raise CheckFailed(f"HEAD {status}, {size} bytes")
+    a = _sd_assets().get(name)
+    size = int((a or {}).get("size") or 0)
+    if not a or size < 5_000_000:
+        raise CheckFailed(f"{name}: {'missing' if not a else f'{size} bytes'} in the latest release")
 
 
 def sd_dmg_arm():
@@ -148,7 +171,7 @@ CHECKS = [
     ("SPC", "landing /es + prices", spc_landing),
     ("SPC", "Supabase REST (public key)", spc_supabase),
     ("SD", "landing superdownloads.app", sd_landing),
-    ("SD", "updater latest.json >= 1.5.5", sd_latest_json),
+    ("SD", "latest release >= 1.5.5 with update bundles", sd_latest_json),
     ("SD", "DMG Apple Silicon", sd_dmg_arm),
     ("SD", "DMG Intel", sd_dmg_intel),
     ("SG", "landing superguides.pro", sg_landing),

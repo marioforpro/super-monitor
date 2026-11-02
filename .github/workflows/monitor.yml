@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 6
     env:
       HC_PING_URL: ${{ secrets.HC_PING_URL }}
+      GH_TOKEN: ${{ github.token }}
       SELFTEST_FAIL: ${{ inputs.selftest_fail && '1' || '' }}
       RETRY_DELAY: ${{ inputs.selftest_fail && '5' || '60' }}
     steps:
