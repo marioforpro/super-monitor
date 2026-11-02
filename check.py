@@ -64,7 +64,10 @@ def sp_landing():
 
 
 def sp_signup():
-    page("https://app.superprompts.pro/signup", "Create Account", "turnstile")
+    # The form (and Turnstile) render client-side behind Suspense, so the server HTML only
+    # carries the page title. The real sign-up path is tested daily by SP's own canary
+    # (/api/cron/signup-canary, FLAG_SIGNUP_CANARY=on), which emails on failure.
+    page("https://app.superprompts.pro/signup", "Create Account")
 
 
 def sp_health():
